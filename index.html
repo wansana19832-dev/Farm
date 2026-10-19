@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมทำสวนแสนสนุก (Garden Simulator)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #e0f7fa, #e8f5e9);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #333;
+        }
+        h1 {
+            color: #2e7d32;
+            margin-bottom: 5px;
+        }
+        .stats {
+            background: #ffffff;
+            padding: 10px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 18px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .stats span {
+            font-weight: bold;
+            color: #d32f2f;
+        }
+        .stats .money {
+            color: #388e3c;
+        }
+        .shop {
+            background: #ffffff;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .btn-shop {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn-shop:hover {
+            background-color: #388e3c;
+        }
+        .farm-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 120px);
+            grid-gap: 15px;
+        }
+        .plot {
+            width: 120px;
+            height: 120px;
+            background-color: #8d6e63;
+            border: 4px dashed #5d4037;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        .plot:hover {
+            transform: scale(1.03);
+            background-color: #795548;
+        }
+        .plot.ready {
+            border-color: #81c784;
+            background-color: #a1887f;
+        }
+        .plant-emoji {
+            font-size: 36px;
+        }
+        .status-text {
+            font-size: 11px;
+            color: #fff;
+            margin-top: 5px;
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .instructions {
+            margin-top: 25px;
+            font-size: 14px;
+            color: #555;
+            text-align: center;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🌱 เกมทำสวนสุดชิลล์</h1>
+    
+    <div class="stats">
+        <div>เงิน: <span class="money" id="money">100</span> G</div>
+        <div>เมล็ดพันธุ์: <span id="seedCount">3</span> เมล็ด</div>
+    </div>
+
+    <div class="shop">
+        <span>ร้านค้า:</span>
+        <button class="btn-shop" onclick="buySeed()">ซื้อเมล็ดพันธุ์ (10 G)</button>
+    </div>
+
+    <div class="farm-grid" id="farmGrid">
+        <!-- แปลงปลูกจะถูกสร้างด้วย JavaScript -->
+    </div>
+
+    <div class="instructions">
+        <strong>วิธีเล่น:</strong><br>
+        1. คลิกที่แปลงดินเพื่อ **ปลูกเมล็ด**<br>
+        2. คลิกซ้ำเพื่อ **รดน้ำ** (รอต้นไม้โต)<br>
+        3. เมื่อไอคอนเปลี่ยนเป็นผลผลิตพร้อมเก็บ ให้คลิกเพื่อ **เก็บเกี่ยว** ไปขายเป็นเงิน!
+    </div>
+
+    <script>
+        // ข้อมูลเกม
+        let money = 100;
+        let seeds = 3;
+        const totalPlots = 6;
+        
+        // สถานะของแปลงดินแต่ละแปลง: state: 'empty', 'planted', 'watered', 'ready'
+        let plots = Array(totalPlots).fill(null).map(() => ({
+            state: 'empty',
+            progress: 0,
+            timer: null
+        }));
+
+        // อ้างอิง Element ในหน้าเว็บ
+        const moneyEl = document.getElementById('money');
+        const seedCountEl = document.getElementById('seedCount');
+        const farmGridEl = document.getElementById('farmGrid');
+
+        // ฟังก์ชันวาดหน้าจอแปลงเกษตร
+        function renderFarm() {
+            farmGridEl.innerHTML = '';
+            plots.forEach((plot, index) => {
+                const plotDiv = document.createElement('div');
+                plotDiv.classList.add('plot');
+                
+                let content = '🟫 ดินว่าง';
+                let statusMsg = 'คลิกเพื่อปลูก';
+
+                if (plot.state === 'planted') {
+                    content = '🌱';
+                    statusMsg = 'ต้องการน้ำ!';
+                    plotDiv.style.backgroundColor = '#6d4c41';
+                } else if (plot.state === 'watered') {
+                    content = '🌿';
+                    statusMsg = 'กำลังโต... ' + plot.progress + '%';
+                    plotDiv.style.backgroundColor = '#5d4037';
+                } else if (plot.state === 'ready') {
+                    content = '🍅';
+                    statusMsg = 'พร้อมเก็บเกี่ยว!';
+                    plotDiv.classList.add('ready');
+                }
+
+                plotDiv.innerHTML = `
+                    <div class="plant-emoji">${content}</div>
+                    <div class="status-text">${statusMsg}</div>
+                `;
+
+                plotDiv.onclick = () => handlePlotClick(index);
+                farmGridEl.appendChild(plotDiv);
+            });
+
+            moneyEl.innerText = money;
+            seedCountEl.innerText = seeds;
+        }
+
+        // จัดการเมื่อคลิกที่แปลงดิน
+        function handlePlotClick(index) {
+            let plot = plots[index];
+
+            if (plot.state === 'empty') {
+                if (seeds > 0) {
+                    seeds--;
+                    plot.state = 'planted';
+                    renderFarm();
+                } else {
+                    alert('เมล็ดพันธุ์หมดแล้ว! ไปซื้อเพิ่มที่ร้านค้าก่อนนะ');
+                }
+            } 
+            else if (plot.state === 'planted') {
+                // รดน้ำ
+                plot.state = 'watered';
+                plot.progress = 0;
+                renderFarm();
+
+                // เริ่มต้นจับเวลาการเจริญเติบโต (เติบโตทุกๆ 1 วินาที)
+                plot.timer = setInterval(() => {
+                    plot.progress += 25; // 4 วินาทีโตเต็มที่
+                    if (plot.progress >= 100) {
+                        clearInterval(plot.timer);
+                        plot.state = 'ready';
+                    }
+                    renderFarm();
+                }, 1000);
+            } 
+            else if (plot.state === 'ready') {
+                // เก็บเกี่ยวผลผลิต
+                money += 25; // ขายได้ 25 G
+                plot.state = 'empty';
+                plot.progress = 0;
+                renderFarm();
+            }
+        }
+
+        // ซื้อเมล็ดพันธุ์
+        function buySeed() {
+            if (money >= 10) {
+                money -= 10;
+                seeds++;
+                renderFarm();
+            } else {
+                alert('เงินไม่พอซื้อเมล็ดพันธุ์จ้า!');
+            }
+        }
+
+        // เริ่มต้นรันเกมครั้งแรก
+        renderFarm();
+    </script>
+</body>
+</html>
